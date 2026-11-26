@@ -1,0 +1,87 @@
+name: Build AndroidKitchen.exe
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to publish releases on tags
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Version check (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          APP=$(python -c "import kitchen; print(kitchen.__version__)")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "app version: $APP, tag: $TAG"
+          if [ "$APP" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match kitchen/__init__.py __version__ ($APP)"
+            exit 1
+          fi
+
+      - name: Fetch ext4 test images
+        shell: bash
+        run: |
+          mkdir -p testdata
+          for f in ext4.bin.gz ext4_symlink_test.bin.gz; do
+            curl -fsSL -o "testdata/$f" "https://media.githubusercontent.com/media/fox-it/dissect.extfs/main/tests/data/$f"
+          done
+          python -c "import gzip,glob;[open(f[:-3],'wb').write(gzip.open(f).read()) for f in glob.glob('testdata/*.gz')]"
+
+      - name: Test - firmware pipeline
+        run: python tests/smoke_test.py testdata
+
+      - name: Test - flash script
+        run: python tests/flash_test.py
+
+      - name: Build exe
+        run: >
+          python -m PyInstaller --noconfirm --clean --onefile --windowed
+          --name AndroidKitchen
+          --hidden-import lz4.frame --hidden-import lz4.block
+          --hidden-import brotli --hidden-import zstandard
+          AndroidKitchen.py
+
+      - name: Smoke-run the exe
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\AndroidKitchen.exe -PassThru
+          Start-Sleep 8
+          if ($p.HasExited -and $p.ExitCode -ne 0) { throw "exe exited with code $($p.ExitCode)" }
+          Get-Process AndroidKitchen -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Item dist\AndroidKitchen.exe | Format-List Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AndroidKitchen-${{ github.sha }}
+          path: dist/AndroidKitchen.exe
+          retention-days: 30
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/AndroidKitchen.exe \
+            --title "Android Kitchen ${GITHUB_REF_NAME#v}" \
+            --generate-notes

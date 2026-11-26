@@ -158,6 +158,24 @@ tests\erofs_test.py      checks the EROFS reader against images made by mkfs.ero
   order, which partitions use `--slot=all`, the cow cleanup, the retry path, the wipe and
   the reboot.
 
+## Automatic builds
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on GitHub's Windows
+machines.
+
+* **On every push to `main` and every pull request:** it runs the tests, builds
+  `AndroidKitchen.exe`, starts it once to check it opens, and attaches it to the run
+  (Actions tab → run → *Artifacts*, kept for 30 days).
+* **To publish a release:**
+  1. Raise `__version__` in `kitchen/__init__.py` (for example to `1.0.1`) and commit.
+  2. Tag and push:
+     ```
+     git tag v1.0.1
+     git push origin main v1.0.1
+     ```
+  3. The workflow checks that the tag matches `__version__`, builds the exe and creates
+     the GitHub Release with the exe attached.
+
 ## License
 
 [MIT](LICENSE) © enawba
