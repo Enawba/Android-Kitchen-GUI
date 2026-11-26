@@ -133,6 +133,7 @@ def generate(workspace: str, images: list[FlashImage], info: dict | None = None,
     a('if not defined FASTBOOT for /f "delims=" %%F in (\'where fastboot 2^>nul\') do '
       'if not defined FASTBOOT set "FASTBOOT=%%F"')
     a("if defined FASTBOOT goto :have_fastboot")
+    a("if defined DRY goto :have_fastboot")   # a preview does not need fastboot
     a(_echo("fastboot.exe was not found."))
     a(_echo("Download Android SDK Platform-Tools from"))
     a(_echo("  https://developer.android.com/tools/releases/platform-tools"))
