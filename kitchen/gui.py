@@ -66,8 +66,11 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} {__version__} - stock firmware APK & config extractor")
-        self.geometry("1180x800")
-        self.minsize(900, 620)
+        # fit small / scaled screens: never open larger than the screen's work area
+        w = min(1180, self.winfo_screenwidth() - 40)
+        h = min(800, self.winfo_screenheight() - 80)
+        self.geometry(f"{w}x{h}")
+        self.minsize(min(760, w), min(480, h))
         self.q: queue.Queue = queue.Queue()
         self.job: GuiJob | None = None
         self.worker: threading.Thread | None = None
@@ -150,6 +153,24 @@ class App(tk.Tk):
                                    command=self._scan)
         self.btn_scan.grid(row=0, column=4, rowspan=2, padx=(12, 0), sticky="ns")
 
+        # --- bottom: progress + actions --------------------------------------------
+        # Packed BEFORE the resizable pane: pack hands out space in packing order, so the
+        # action buttons always stay visible and the pane shrinks on small windows.
+        bottom = ttk.Frame(outer)
+        bottom.pack(side="bottom", fill="x", pady=(8, 0))
+        # buttons first (right to left), so a narrow window squeezes the progress bar instead
+        self.btn_cancel = ttk.Button(bottom, text="Cancel", command=self._cancel, state="disabled")
+        self.btn_cancel.pack(side="right")
+        self.btn_start = ttk.Button(bottom, text="Extract selected", style="Accent.TButton",
+                                    command=self._start, state="disabled")
+        self.btn_start.pack(side="right", padx=(0, 6))
+        self.btn_flash = ttk.Button(bottom, text="Build flash script", command=self._build_flash,
+                                    state="disabled")
+        self.btn_flash.pack(side="right", padx=(0, 6))
+        ttk.Label(bottom, textvariable=self.v_status, width=32, anchor="w").pack(side="right", padx=8)
+        self.pbar = ttk.Progressbar(bottom, mode="determinate", maximum=1000, length=80)
+        self.pbar.pack(side="left", fill="x", expand=True)
+
         # --- notebook + log in a vertical pane ---------------------------------------
         pane = ttk.Panedwindow(outer, orient="vertical")
         pane.pack(fill="both", expand=True, pady=(8, 0))
@@ -161,8 +182,18 @@ class App(tk.Tk):
 
         logf = ttk.LabelFrame(pane, text=" Log ", padding=4)
         pane.add(logf, weight=2)
+        # ttk.Panedwindow takes space from the last pane first, so on a short window the
+        # log would vanish: keep at least LOG_MIN px of it whenever the pane is resized.
+        LOG_MIN = 110
+
+        def keep_log_visible(_e=None):
+            total = pane.winfo_height()
+            if total > 2 * LOG_MIN and total - pane.sashpos(0) < LOG_MIN:
+                pane.sashpos(0, total - LOG_MIN)
+        pane.bind("<Configure>", lambda e: self.after_idle(keep_log_visible))
         self.log_text = tk.Text(logf, height=10, wrap="word", font=("Consolas", 9),
-                                state="disabled", relief="flat", background="#fbfbfb")
+                                state="disabled", relief="flat", background="#fbfbfb",
+                                foreground="#1f1f1f", insertbackground="#1f1f1f")
         sb = ttk.Scrollbar(logf, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=sb.set)
         self.log_text.pack(side="left", fill="both", expand=True)
@@ -172,21 +203,6 @@ class App(tk.Tk):
                 self.log_text.tag_configure(lvl, foreground=color)
         self.log_text.tag_configure("head", foreground=LOG_COLORS["head"],
                                     font=("Consolas", 9, "bold"))
-
-        # --- bottom: progress + actions --------------------------------------------
-        bottom = ttk.Frame(outer)
-        bottom.pack(fill="x", pady=(8, 0))
-        self.pbar = ttk.Progressbar(bottom, mode="determinate", maximum=1000)
-        self.pbar.pack(side="left", fill="x", expand=True)
-        ttk.Label(bottom, textvariable=self.v_status, width=48, anchor="w").pack(side="left", padx=8)
-        self.btn_cancel = ttk.Button(bottom, text="Cancel", command=self._cancel, state="disabled")
-        self.btn_cancel.pack(side="right")
-        self.btn_start = ttk.Button(bottom, text="Extract selected", style="Accent.TButton",
-                                    command=self._start, state="disabled")
-        self.btn_start.pack(side="right", padx=(0, 6))
-        self.btn_flash = ttk.Button(bottom, text="Build flash script", command=self._build_flash,
-                                    state="disabled")
-        self.btn_flash.pack(side="right", padx=(0, 6))
 
     def _build_partitions_tab(self):
         f = ttk.Frame(self.nb, padding=6)

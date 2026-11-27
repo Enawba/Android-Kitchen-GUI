@@ -176,6 +176,10 @@ machines.
   3. The workflow checks that the tag matches `__version__`, builds the exe and creates
      the GitHub Release with the exe attached.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE) © enawba
