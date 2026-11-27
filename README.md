@@ -167,11 +167,13 @@ machines.
   `AndroidKitchen.exe`, starts it once to check it opens, and attaches it to the run
   (Actions tab → run → *Artifacts*, kept for 30 days).
 * **To publish a release:**
-  1. Raise `__version__` in `kitchen/__init__.py` (for example to `1.0.1`) and commit.
+  1. Raise `__version__` in `kitchen/__init__.py` (for example to `1.0.2`), add a
+     `## 1.0.2 (date)` section to [CHANGELOG.md](CHANGELOG.md), and commit. That section
+     becomes the release notes; a tag without one fails instead of publishing.
   2. Tag and push:
      ```
-     git tag v1.0.1
-     git push origin main v1.0.1
+     git tag v1.0.2
+     git push origin main v1.0.2
      ```
   3. The workflow checks that the tag matches `__version__`, builds the exe and creates
      the GitHub Release with the exe attached.

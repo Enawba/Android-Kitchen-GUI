@@ -62,6 +62,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # tags, for the release notes' changelog link
 
       - uses: actions/setup-python@v6
         with:
@@ -117,6 +119,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # release notes = this version's section of CHANGELOG.md ("## 1.2.3 (date)")
+          VER="${GITHUB_REF_NAME#v}"
+          awk -v v="$VER" '$0 ~ "^## " v " " {f=1; next} /^## /{f=0} f' CHANGELOG.md \
+            | sed '/./,$!d' > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## $VER (...)' section"
+            exit 1
+          fi
+          PREV=$(git tag --sort=-v:refname | grep -v "^$GITHUB_REF_NAME$" | head -n 1)
+          {
+            echo
+            echo '**Download:** `AndroidKitchen.exe` below. It is a single file and needs no installation.'
+            [ -n "$PREV" ] && echo && echo "**Full changelog:** https://github.com/$GITHUB_REPOSITORY/compare/$PREV...$GITHUB_REF_NAME"
+          } >> notes.md
           gh release create "$GITHUB_REF_NAME" dist/AndroidKitchen.exe \
-            --title "Android Kitchen ${GITHUB_REF_NAME#v}" \
-            --generate-notes
+            --title "Android Kitchen $VER" \
+            --notes-file notes.md
